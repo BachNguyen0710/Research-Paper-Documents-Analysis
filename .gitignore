@@ -4,3 +4,4 @@ src/__pycache__/
 src/stopword_filter.py
 umap_clusters-Cosine.html
 umap_clusters-Euclide.html
+__pycache__/

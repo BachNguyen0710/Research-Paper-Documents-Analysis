@@ -22,3 +22,13 @@ py src/umap_visualization-Cosine.py --input output/embeddings.jsonl --titles dat
 py src/umap_visualization-Euclide.py --input output/embeddings.jsonl --titles data/biorxiv_sciedu.csv --output umap_clusters-Euclide.html --n-clusters 6
 ### HDBSCAN
 python src/umap_visualization_hdbscan.py --input output/embeddings.jsonl --titles data/biorxiv_sciedu.csv --output output/umap_hdbscan_clusters_fast.html
+```
+### 3. Extract data for FastApi
+```bash
+py src/umap_visualization-Euclide.py --input output/embeddings.jsonl --titles data/biorxiv_sciedu.csv --output output/umap_euclide_data.json --n-clusters 6
+```
+### 4. Run App
+```bash
+uvicorn app:app --reload
+```
+### Go to locall host http://127.0.0.1:8000 for visualization and interaction 

@@ -1,7 +1,10 @@
 requests
 pandas
-sci-klearn
+scikit-learn
 matplotlib
 umap-learn
 torch
 transformers
+fastapi 
+uvicorn 
+plotly
