@@ -6,6 +6,10 @@ from fastapi.staticfiles import StaticFiles
 import pandas as pd
 import os
 from typing import List, Dict, Any
+from sklearn.feature_extraction.text import TfidfVectorizer
+import re
+from collections import defaultdict
+import numpy as np
 
 app = FastAPI()
 
@@ -28,6 +32,180 @@ async def get_visualization_data():
         
     except Exception as e:
         return {"error": f"Error processing data file: {str(e)}"}, 500
+
+@app.get("/api/cluster-keywords")
+async def get_cluster_keywords():
+    """Generate TF-IDF keywords for each cluster."""
+    if not os.path.exists(DATA_FILE):
+        return {"error": "Visualization data file not found."}, 404
+    
+    try:
+        df = pd.read_json(DATA_FILE, orient='records', lines=True)
+        
+        # Kiểm tra xem có cột abstract không
+        if 'abstract' not in df.columns:
+            return {"error": "Abstract data not found. Please regenerate data with abstracts."}, 400
+        
+        # Nhóm abstracts theo cluster
+        cluster_texts = defaultdict(list)
+        for _, row in df.iterrows():
+            if pd.notna(row['abstract']) and row['abstract'].strip():
+                cluster_texts[row['cluster']].append(row['abstract'])
+        
+        if not cluster_texts:
+            return {"error": "No valid abstracts found."}, 400
+        
+        # Tạo documents cho mỗi cluster (kết hợp tất cả abstracts trong cluster)
+        cluster_docs = {}
+        for cluster, abstracts in cluster_texts.items():
+            cluster_docs[cluster] = ' '.join(abstracts)
+        
+        # Tiền xử lý text với custom stopwords
+        def preprocess_text(text):
+            # Chuyển về lowercase và loại bỏ ký tự đặc biệt
+            text = re.sub(r'[^a-zA-Z\s]', '', text.lower())
+            
+            # Custom stopwords - bao gồm stopwords cơ bản và từ phổ biến trong nghiên cứu khoa học
+            basic_stopwords = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 
+                             'is', 'are', 'was', 'were', 'be', 'been', 'have', 'has', 'had', 'do', 'does', 'did', 
+                             'will', 'would', 'could', 'should', 'may', 'might', 'can', 'this', 'that', 'these', 
+                             'those', 'we', 'us', 'our', 'ours', 'you', 'your', 'yours', 'he', 'him', 'his', 
+                             'she', 'her', 'hers', 'it', 'its', 'they', 'them', 'their', 'theirs', 'not', 'no', 
+                             'yes', 'one', 'two', 'three', 'first', 'second', 'third', 'also', 'more', 'most', 
+                             'other', 'some', 'such', 'only', 'all', 'any', 'each', 'both', 'between', 'through'}
+            
+            # Scientific/research specific stopwords
+            scientific_stopwords = {'study', 'studies', 'research', 'method', 'methods', 'analysis', 'data', 
+                                   'result', 'results', 'conclusion', 'conclusions', 'background', 'objective', 
+                                   'objectives', 'purpose', 'approach', 'paper', 'article', 'work', 'present', 
+                                   'show', 'showed', 'shown', 'found', 'find', 'finding', 'findings', 'observed', 
+                                   'observe', 'suggest', 'suggests', 'suggested', 'indicate', 'indicates', 
+                                   'indicated', 'demonstrate', 'demonstrates', 'demonstrated', 'report', 'reported', 
+                                   'describe', 'described', 'investigate', 'investigated', 'examine', 'examined', 
+                                   'evaluate', 'evaluated', 'assess', 'assessed', 'analyze', 'analyzed', 'measure', 
+                                   'measured', 'compare', 'compared', 'comparison', 'based', 'using', 'used', 
+                                   'significantly', 'significant', 'different', 'difference', 'differences', 
+                                   'important', 'potential', 'possible', 'likely', 'however', 'therefore', 
+                                   'moreover', 'furthermore', 'additionally', 'finally', 'conclusion', 'abstract', 
+                                   'introduction', 'discussion', 'experimental', 'experiment', 'experiments',
+                                   'including', 'respectively', 'particularly', 'especially', 'mainly', 'generally',
+                                   'specifically', 'overall', 'total', 'number', 'level', 'levels', 'effect', 
+                                   'effects', 'factor', 'factors', 'model', 'models', 'system', 'systems',
+                                   'process', 'processes', 'well', 'high', 'low', 'large', 'small', 'new', 'old'}
+            
+            # Medical/biological stopwords
+            medical_stopwords = {'patient', 'patients', 'clinical', 'trial', 'trials', 'treatment', 'treatments', 
+                               'therapy', 'therapies', 'disease', 'diseases', 'condition', 'conditions', 'cell', 
+                               'cells', 'gene', 'genes', 'protein', 'proteins', 'sample', 'samples', 'group', 
+                               'groups', 'control', 'controls', 'case', 'cases', 'subject', 'subjects', 
+                               'individual', 'individuals', 'population', 'populations', 'age', 'gender', 
+                               'male', 'female', 'year', 'years', 'time', 'times', 'week', 'weeks', 'day', 
+                               'days', 'month', 'months', 'hour', 'hours', 'percent', 'percentage'}
+            
+            # Kết hợp tất cả stopwords
+            all_stopwords = basic_stopwords | scientific_stopwords | medical_stopwords
+            
+            words = [word for word in text.split() if word not in all_stopwords and len(word) > 2]
+            return ' '.join(words)
+        
+        # Áp dụng tiền xử lý
+        processed_docs = {cluster: preprocess_text(text) for cluster, text in cluster_docs.items()}
+        
+        # Tính TF-IDF với tham số được tối ưu
+        vectorizer = TfidfVectorizer(
+            max_features=2000,
+            ngram_range=(1, 3),  # Unigrams, bigrams và trigrams
+            min_df=1,  # Từ phải xuất hiện ít nhất 1 lần
+            max_df=0.7,  # Không lấy từ xuất hiện quá nhiều (>70% documents)
+            stop_words=None,  # Đã xử lý stopwords trong preprocess_text
+            lowercase=False,  # Đã lowercase trong preprocess_text
+            token_pattern=r'\b[a-zA-Z]{3,}\b'  # Chỉ lấy từ có ít nhất 3 ký tự
+        )
+        
+        cluster_names = list(processed_docs.keys())
+        documents = [processed_docs[cluster] for cluster in cluster_names]
+        
+        if not documents or not any(doc.strip() for doc in documents):
+            return {"error": "No valid processed documents found."}, 400
+        
+        tfidf_matrix = vectorizer.fit_transform(documents)
+        feature_names = vectorizer.get_feature_names_out()
+        
+        # Function để tạo cluster label từ keywords
+        def generate_cluster_label(keywords):
+            if not keywords:
+                return "Unknown Topic"
+            
+            # Lấy top 3 keywords có score cao nhất
+            top_keywords = [kw['keyword'] for kw in keywords[:3]]
+            
+            # Định nghĩa các chủ đề phổ biến trong y học/khoa học
+            topic_patterns = {
+                'Genetics & Genomics': ['genetic', 'genome', 'dna', 'mutation', 'sequencing', 'genomic', 'variant', 'chromosome', 'inheritance', 'allele'],
+                'Cancer Research': ['cancer', 'tumor', 'malignant', 'oncology', 'chemotherapy', 'metastasis', 'carcinoma', 'neoplasm', 'radiation', 'biopsy'],
+                'Neuroscience': ['brain', 'neural', 'neuron', 'cognitive', 'neurological', 'memory', 'learning', 'synaptic', 'cortex', 'alzheimer'],
+                'Immunology': ['immune', 'antibody', 'vaccination', 'antigen', 'lymphocyte', 'inflammatory', 'autoimmune', 'cytokine', 'immunization'],
+                'Cardiology': ['heart', 'cardiac', 'cardiovascular', 'blood pressure', 'coronary', 'myocardial', 'vessel', 'circulation', 'stroke'],
+                'Infectious Diseases': ['infection', 'bacterial', 'viral', 'pathogen', 'antimicrobial', 'epidemic', 'vaccine', 'antibiotic', 'contamination'],
+                'Cell Biology': ['cellular', 'mitochondrial', 'membrane', 'organelle', 'cytoplasm', 'nucleus', 'division', 'apoptosis', 'metabolism'],
+                'Molecular Biology': ['molecular', 'enzyme', 'binding', 'interaction', 'pathway', 'signaling', 'regulation', 'expression', 'synthesis'],
+                'Pharmacology': ['drug', 'therapeutic', 'dosage', 'pharmacokinetic', 'toxicity', 'medication', 'pharmaceutical', 'clinical trial'],
+                'Epidemiology': ['population', 'prevalence', 'incidence', 'risk factor', 'cohort', 'surveillance', 'outbreak', 'mortality', 'morbidity'],
+                'Data Science & AI': ['machine learning', 'algorithm', 'prediction', 'classification', 'deep learning', 'artificial intelligence', 'model', 'dataset'],
+                'Medical Imaging': ['imaging', 'scan', 'mri', 'tomography', 'ultrasound', 'radiological', 'diagnostic', 'visualization', 'reconstruction'],
+                'Public Health': ['health policy', 'prevention', 'community health', 'healthcare', 'intervention', 'screening', 'awareness', 'promotion']
+            }
+            
+            # Kiểm tra từ khóa có match với pattern nào không
+            keyword_text = ' '.join(top_keywords).lower()
+            best_match = None
+            max_matches = 0
+            
+            for topic, patterns in topic_patterns.items():
+                matches = sum(1 for pattern in patterns if pattern in keyword_text)
+                if matches > max_matches:
+                    max_matches = matches
+                    best_match = topic
+            
+            # Nếu có match tốt, return topic name
+            if best_match and max_matches >= 1:
+                return best_match
+            
+            # Nếu không match, tạo label từ top 2-3 keywords
+            if len(top_keywords) >= 2:
+                return f"{top_keywords[0].title()} & {top_keywords[1].title()}"
+            else:
+                return top_keywords[0].title() if top_keywords else "General Research"
+
+        # Lấy top keywords cho mỗi cluster và tạo label
+        cluster_keywords = {}
+        cluster_labels = {}
+        for i, cluster in enumerate(cluster_names):
+            tfidf_scores = tfidf_matrix[i].toarray()[0]
+            
+            # Lấy top 15 keywords với score > 0.01
+            top_indices = np.argsort(tfidf_scores)[-20:][::-1]
+            keywords = [
+                {
+                    "keyword": feature_names[idx],
+                    "score": float(tfidf_scores[idx])
+                }
+                for idx in top_indices if tfidf_scores[idx] > 0.01
+            ]
+            
+            # Giới hạn tối đa 15 keywords
+            cluster_keywords[cluster] = keywords[:15]
+            
+            # Tạo meaningful label cho cluster
+            cluster_labels[cluster] = generate_cluster_label(keywords[:15])
+        
+        return {
+            "keywords": cluster_keywords,
+            "labels": cluster_labels
+        }
+        
+    except Exception as e:
+        return {"error": f"Error processing TF-IDF: {str(e)}"}, 500
 
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request):

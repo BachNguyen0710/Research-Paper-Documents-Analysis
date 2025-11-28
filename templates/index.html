@@ -1,115 +1,472 @@
 <!DOCTYPE html>
 <html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <title>BioRxiv Paper Clusters (Euclidean)</title>
+        <script src="https://cdn.plot.ly/plotly-2.30.0.min.js"></script>
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                margin: 0;
+                padding: 20px;
+            }
 
-<head>
-    <meta charset="UTF-8">
-    <title>BioRxiv Paper Clusters (Euclidean)</title>
-    <script src="https://cdn.plot.ly/plotly-2.30.0.min.js"></script>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-        }
+            .container {
+                display: flex;
+                gap: 20px;
+                height: 90vh;
+            }
 
-        #plot {
-            width: 100%;
-            height: 90vh;
-            margin-top: 20px;
-        }
-    </style>
-</head>
+            #plot {
+                flex: 2;
+                height: 100%;
+                border: 1px solid #ddd;
+                border-radius: 5px;
+            }
 
-<body>
-    <h1>Visualization of BioRxiv Papers (Euclidean Distance)</h1>
-    <div id="plot"></div>
+            #info-panel {
+                flex: 1;
+                padding: 20px;
+                background-color: #f9f9f9;
+                border: 1px solid #ddd;
+                border-radius: 5px;
+                overflow-y: auto;
+            }
 
-    <script>
-        const plotDiv = document.getElementById('plot');
+            .paper-info {
+                display: none;
+            }
 
-        // Hàm Tải Dữ liệu từ FastAPI
-        async function fetchData() {
-            try {
-                const response = await fetch('/api/data');
-                const result = await response.json();
+            .paper-info.active {
+                display: block;
+            }
 
-                if (result.error) {
-                    plotDiv.innerHTML = `<p style="color: red;">Load data Error: ${result.error}</p>`;
+            .paper-title {
+                font-size: 18px;
+                font-weight: bold;
+                margin-bottom: 15px;
+                color: #333;
+                line-height: 1.4;
+            }
+
+            .paper-abstract {
+                font-size: 14px;
+                line-height: 1.6;
+                color: #555;
+                text-align: justify;
+            }
+
+            .paper-meta {
+                margin: 15px 0;
+                padding: 10px;
+                background-color: #e9ecef;
+                border-radius: 5px;
+            }
+
+            .meta-item {
+                margin: 5px 0;
+                font-size: 13px;
+            }
+
+            .meta-label {
+                font-weight: bold;
+                color: #495057;
+            }
+
+            .placeholder {
+                text-align: center;
+                color: #666;
+                font-style: italic;
+                margin-top: 50px;
+            }
+
+            .paper-url {
+                color: #007bff;
+                text-decoration: none;
+                word-break: break-all;
+            }
+
+            .paper-url:hover {
+                text-decoration: underline;
+            }
+
+            /* CSS cho điểm được chọn */
+            .plotly .scatterlayer .trace.scatter .points .point.selected {
+                stroke: #00ccff !important;
+                stroke-width: 1px !important;
+                stroke-opacity: 0.7 !important;
+            }
+
+            /* CSS cho keywords */
+            .cluster-keywords {
+                margin: 15px 0;
+                padding: 15px;
+                background-color: #e3f2fd;
+                border-radius: 5px;
+                border-left: 4px solid #1976d2;
+            }
+
+            .keywords-title {
+                font-weight: bold;
+                color: #1976d2;
+                margin-bottom: 10px;
+                font-size: 14px;
+            }
+
+            .keywords-list {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 5px;
+            }
+
+            .keyword-tag {
+                background-color: #1976d2;
+                color: white;
+                padding: 4px 8px;
+                border-radius: 12px;
+                font-size: 12px;
+                font-weight: 500;
+            }
+
+            .keyword-score {
+                opacity: 0.8;
+                font-size: 10px;
+                margin-left: 4px;
+            }
+
+            .loading-keywords {
+                color: #666;
+                font-style: italic;
+                font-size: 12px;
+            }
+
+            .cluster-legend {
+                margin: 10px 0;
+                padding: 10px;
+                background-color: #f8f9fa;
+                border-radius: 5px;
+                font-size: 12px;
+            }
+
+            .legend-title {
+                font-weight: bold;
+                margin-bottom: 8px;
+                color: #495057;
+            }
+
+            .legend-item {
+                display: flex;
+                justify-content: space-between;
+                margin: 3px 0;
+                padding: 2px 0;
+            }
+
+            .legend-cluster {
+                font-weight: 500;
+            }
+
+            .legend-topic {
+                color: #1976d2;
+                font-style: italic;
+            }
+        </style>
+    </head>
+
+    <body>
+        <h1>Visualization of BioRxiv Papers (Euclidean Distance)</h1>
+        <div class="container">
+            <div id="plot"></div>
+            <div id="info-panel">
+                <div class="placeholder">
+                    <p>Nhấp vào một điểm trong đồ thị để xem thông tin chi tiết của bài báo</p>
+                    <div class="cluster-legend" id="cluster-overview" style="display: none">
+                        <div class="legend-title">Tổng quan các chủ đề trong nghiên cứu:</div>
+                        <div id="legend-content"></div>
+                    </div>
+                </div>
+                <div class="paper-info" id="paper-details">
+                    <div class="paper-title" id="paper-title"></div>
+                    <div class="paper-meta">
+                        <div class="meta-item">
+                            <span class="meta-label">Cluster:</span>
+                            <span id="paper-cluster"></span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Chủ đề:</span>
+                            <span id="cluster-topic" style="font-weight: bold; color: #1976d2"></span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">DOI:</span>
+                            <span id="paper-doi"></span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">URL:</span>
+                            <a href="#" id="paper-url" class="paper-url" target="_blank">Xem bài báo</a>
+                        </div>
+                    </div>
+                    <div class="cluster-keywords" id="cluster-keywords">
+                        <div class="keywords-title">Từ khóa chủ đề của cluster (TF-IDF):</div>
+                        <div id="keywords-content" class="loading-keywords">Đang tải từ khóa...</div>
+                    </div>
+                    <div class="paper-abstract" id="paper-abstract"></div>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            const plotDiv = document.getElementById('plot');
+            let plotData = [];
+            let selectedPoint = null;
+            let clusterKeywords = {};
+            let clusterLabels = {};
+
+            // Hàm lấy keywords và labels từ FastAPI
+            async function fetchClusterKeywords() {
+                try {
+                    const response = await fetch('/api/cluster-keywords');
+                    const result = await response.json();
+
+                    if (result.error) {
+                        console.error('Error fetching keywords:', result.error);
+                        return null;
+                    }
+                    return {
+                        keywords: result.keywords || {},
+                        labels: result.labels || {}
+                    };
+                } catch (error) {
+                    console.error('Error connecting to keywords API:', error);
                     return null;
                 }
-                return result.data;
-            } catch (error) {
-                plotDiv.innerHTML = `<p style="color: red;"> Can not connect to FastAPI: ${error.message}</p>`;
-                return null;
             }
-        }
 
-        // Hàm Vẽ Biểu đồ Plotly
-        async function renderPlot() {
-            const data = await fetchData();
-            if (!data) return;
+            // Hàm hiển thị keywords cho cluster
+            function displayClusterKeywords(cluster) {
+                const keywordsContent = document.getElementById('keywords-content');
+                const keywordsTitle = document.querySelector('.keywords-title');
 
-            const uniqueClusters = [...new Set(data.map(d => d.cluster))].sort();
+                // Cập nhật tiêu đề với cluster label
+                const clusterLabel = clusterLabels[cluster] || 'Chủ đề chưa xác định';
+                keywordsTitle.innerHTML = `Từ khóa chủ đề: <strong style="color: #1976d2;">${clusterLabel}</strong>`;
 
-            const plotData = uniqueClusters.map(clusterName => {
-                const clusterData = data.filter(d => d.cluster === clusterName);
+                if (!clusterKeywords || !clusterKeywords[cluster]) {
+                    keywordsContent.innerHTML = '<em>Không có từ khóa cho cluster này</em>';
+                    return;
+                }
 
-                const customData = clusterData.map(d => [d.url, d.title, d.doi]);
+                const keywords = clusterKeywords[cluster];
+                if (keywords.length === 0) {
+                    keywordsContent.innerHTML = '<em>Không tìm thấy từ khóa</em>';
+                    return;
+                }
 
-                const hoverText = clusterData.map(d =>
-                    `<b>Title:</b> ${d.title}<br>` +
-                    `<b>Cluster:</b> ${d.cluster}<br>` +
-                    `<b>DOI:</b> ${d.doi}`
-                );
+                // Tạo HTML cho keywords với màu gradient dựa trên score
+                const keywordsHtml = keywords
+                    .map((kw, index) => {
+                        // Tạo màu gradient từ xanh đậm đến xanh nhạt dựa trên thứ tự
+                        const opacity = Math.max(0.3, 1 - index * 0.05);
+                        return `<span class="keyword-tag" style="background-color: rgba(25, 118, 210, ${opacity})">
+                        ${kw.keyword}
+                        <span class="keyword-score">(${kw.score.toFixed(3)})</span>
+                    </span>`;
+                    })
+                    .join('');
 
-                return {
-                    x: clusterData.map(d => d.UMAP_1),
-                    y: clusterData.map(d => d.UMAP_2),
-                    mode: 'markers',
-                    type: 'scattergl',
-                    name: clusterName,
-                    marker: {
-                        size: 8,
-                        line: {
-                            width: 0.5,
-                            color: 'white'
-                        }
-                    },
-                    text: hoverText,
-                    hoverinfo: 'text',
-                    customdata: customData
+                keywordsContent.innerHTML = `<div class="keywords-list">${keywordsHtml}</div>`;
+            }
+
+            // Hàm hiển thị tổng quan clusters
+            function displayClusterOverview() {
+                const overviewElement = document.getElementById('cluster-overview');
+                const legendContent = document.getElementById('legend-content');
+
+                if (!clusterLabels || Object.keys(clusterLabels).length === 0) {
+                    return;
+                }
+
+                const legendHtml = Object.entries(clusterLabels)
+                    .map(
+                        ([cluster, label]) =>
+                            `<div class="legend-item">
+                            <span class="legend-cluster">${cluster}</span>
+                            <span class="legend-topic">${label}</span>
+                        </div>`
+                    )
+                    .join('');
+
+                legendContent.innerHTML = legendHtml;
+                overviewElement.style.display = 'block';
+            }
+
+            // Hàm Tải Dữ liệu từ FastAPI
+            async function fetchData() {
+                try {
+                    const response = await fetch('/api/data');
+                    const result = await response.json();
+
+                    if (result.error) {
+                        plotDiv.innerHTML = `<p style="color: red;">Load data Error: ${result.error}</p>`;
+                        return null;
+                    }
+                    return result.data;
+                } catch (error) {
+                    plotDiv.innerHTML = `<p style="color: red;"> Can not connect to FastAPI: ${error.message}</p>`;
+                    return null;
+                }
+            }
+
+            // Hàm Vẽ Biểu đồ Plotly
+            async function renderPlot() {
+                const data = await fetchData();
+                if (!data) return;
+
+                // Tải keywords và labels cho các clusters
+                const keywordData = await fetchClusterKeywords();
+                if (keywordData) {
+                    clusterKeywords = keywordData.keywords;
+                    clusterLabels = keywordData.labels;
+                } else {
+                    console.warn('Could not load cluster keywords and labels');
+                    clusterKeywords = {};
+                    clusterLabels = {};
+                }
+
+                const uniqueClusters = [...new Set(data.map((d) => d.cluster))].sort();
+
+                plotData = uniqueClusters.map((clusterName) => {
+                    const clusterData = data.filter((d) => d.cluster === clusterName);
+
+                    const customData = clusterData.map((d) => [d.url, d.title, d.doi, d.abstract || '', d.cluster]);
+
+                    const hoverText = clusterData.map(
+                        (d) =>
+                            `<b>Title:</b> ${d.title}<br>` + `<b>Cluster:</b> ${d.cluster}<br>` + `<b>DOI:</b> ${d.doi}`
+                    );
+
+                    return {
+                        x: clusterData.map((d) => d.UMAP_1),
+                        y: clusterData.map((d) => d.UMAP_2),
+                        mode: 'markers',
+                        type: 'scattergl',
+                        name: clusterName,
+                        marker: {
+                            size: 8,
+                            line: {
+                                width: 0.5,
+                                color: 'white'
+                            }
+                        },
+                        text: hoverText,
+                        hoverinfo: 'text',
+                        customdata: customData
+                    };
+                });
+
+                const layout = {
+                    title: 'Phân cụm Paper bằng UMAP và KMeans (Euclidean)',
+                    xaxis: { title: 'UMAP 1' },
+                    yaxis: { title: 'UMAP 2' },
+                    hovermode: 'closest',
+                    clickmode: 'event+select'
                 };
-            });
 
-            const layout = {
-                title: 'Phân cụm Paper bằng UMAP và KMeans (Euclidean)',
-                xaxis: { title: 'UMAP 1' },
-                yaxis: { title: 'UMAP 2' },
-                hovermode: 'closest',
-                clickmode: 'event+select'
-            };
+                Plotly.newPlot(plotDiv, plotData, layout, {
+                    responsive: true,
+                    displayModeBar: true
+                });
 
-            Plotly.newPlot(plotDiv, plotData, layout, {
-                responsive: true,
-                displayModeBar: true
-            });
+                // Hiển thị tổng quan clusters sau khi vẽ xong đồ thị
+                displayClusterOverview();
 
-            plotDiv.on('plotly_click', function (eventData) {
-                if (eventData.points.length > 0) {
-                    const point = eventData.points[0];
+                plotDiv.on('plotly_click', function (eventData) {
+                    if (eventData.points.length > 0) {
+                        const point = eventData.points[0];
 
-                    const url = point.customdata[0];
+                        // Lấy thông tin từ customdata
+                        const url = point.customdata[0];
+                        const title = point.customdata[1];
+                        const doi = point.customdata[2];
+                        const abstract = point.customdata[3];
+                        const cluster = point.customdata[4];
 
-                    if (url && url.startsWith('http')) {
+                        // Highlight điểm được chọn
+                        // highlightSelectedPoint(point);
+
+                        // Mở tab mới khi nhấp vào URL
                         window.open(url, '_blank');
+
+                        // Hiển thị thông tin trong panel bên phải
+                        displayPaperInfo(title, abstract, cluster, doi, url);
+                    }
+                });
+
+                // Hàm highlight điểm được chọn
+                function highlightSelectedPoint(point) {
+                    // Reset tất cả điểm về trạng thái bình thường
+                    const update = {
+                        'marker.line.width': plotData.map((trace) => new Array(trace.x.length).fill(0.5)),
+                        'marker.line.color': plotData.map((trace) => new Array(trace.x.length).fill('white'))
+                    };
+
+                    // Highlight điểm được chọn
+                    const traceIndex = point.curveNumber;
+                    const pointIndex = point.pointNumber;
+
+                    update['marker.line.width'][traceIndex][pointIndex] = 1;
+
+                    //Update màu theo riêng màu cluster
+                    const clusterColors = [
+                        '#1f77b4',
+                        '#ff7f0e',
+                        '#2ca02c',
+                        '#d62728',
+                        '#9467bd',
+                        '#8c564b',
+                        '#e377c2',
+                        '#7f7f7f',
+                        '#bcbd22',
+                        '#17becf'
+                    ];
+                    const clusterColor = clusterColors[traceIndex % clusterColors.length];
+                    update['marker.line.color'][traceIndex][pointIndex] = clusterColor;
+
+                    Plotly.restyle(plotDiv, update);
+
+                    selectedPoint = { traceIndex, pointIndex };
+                }
+
+                // Hàm hiển thị thông tin bài báo
+                function displayPaperInfo(title, abstract, cluster, doi, url) {
+                    // Ẩn placeholder và hiển thị thông tin bài báo
+                    document.querySelector('.placeholder').style.display = 'none';
+                    document.getElementById('paper-details').classList.add('active');
+
+                    // Cập nhật nội dung
+                    document.getElementById('paper-title').textContent = title;
+                    document.getElementById('paper-cluster').textContent = cluster;
+
+                    // Hiển thị cluster label nếu có
+                    const topicElement = document.getElementById('cluster-topic');
+                    const clusterLabel = clusterLabels[cluster] || 'Chưa phân loại';
+                    topicElement.textContent = clusterLabel;
+
+                    document.getElementById('paper-doi').textContent = doi;
+                    document.getElementById('paper-url').href = url;
+
+                    // Hiển thị keywords cho cluster
+                    displayClusterKeywords(cluster);
+
+                    // Hiển thị abstract hoặc thông báo nếu không có
+                    const abstractElement = document.getElementById('paper-abstract');
+                    if (abstract && abstract.trim()) {
+                        abstractElement.innerHTML = `<strong>Abstract:</strong><br>${abstract}`;
                     } else {
-                        console.error("URL is not acceptted or missed:", url);
-                        alert("Can not found URL.");
+                        abstractElement.innerHTML = `<strong>Abstract:</strong><br><em>Abstract không có sẵn trong dữ liệu hiện tại.</em>`;
                     }
                 }
-            });
-        }
+            }
 
-        document.addEventListener('DOMContentLoaded', renderPlot);
-    </script>
-</body>
-
+            document.addEventListener('DOMContentLoaded', renderPlot);
+        </script>
+    </body>
 </html>

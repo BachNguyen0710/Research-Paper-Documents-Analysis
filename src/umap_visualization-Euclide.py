@@ -44,6 +44,7 @@ def main():
 
         titles = df_metadata['title'].tolist()
         dois = df_metadata['doi'].tolist()
+        abstracts = df_metadata['abstract'].tolist() if 'abstract' in df_metadata.columns else ['' for _ in range(len(titles))]
         
     except Exception as e:
         print(f"Error loading metadata: {e}. Cannot proceed without DOI.")
@@ -79,6 +80,7 @@ def main():
     df_vis['paper_id'] = paper_ids
     df_vis['title'] = titles
     df_vis['doi'] = dois
+    df_vis['abstract'] = abstracts
     
     df_vis['cluster'] = cluster_labels
     df_vis['cluster'] = 'Cluster ' + df_vis['cluster'].astype(str) 
@@ -87,7 +89,7 @@ def main():
 
     print(f"Saving visualization data to {args.output}...")
 
-    df_vis[['UMAP_1', 'UMAP_2', 'title', 'cluster', 'doi', 'url']].to_json(
+    df_vis[['UMAP_1', 'UMAP_2', 'title', 'cluster', 'doi', 'url', 'abstract']].to_json(
         args.output,
         orient='records',
         lines=True,
