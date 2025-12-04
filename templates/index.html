@@ -169,11 +169,132 @@
                 color: #1976d2;
                 font-style: italic;
             }
+
+            /* CSS cho filter controls */
+            .filter-panel {
+                background-color: #f8f9fa;
+                padding: 15px;
+                border-radius: 5px;
+                margin-bottom: 20px;
+                border: 1px solid #dee2e6;
+            }
+
+            .filter-row {
+                display: flex;
+                gap: 15px;
+                align-items: center;
+                margin-bottom: 10px;
+                flex-wrap: wrap;
+            }
+
+            .filter-group {
+                display: flex;
+                flex-direction: column;
+                gap: 5px;
+            }
+
+            .filter-label {
+                font-weight: bold;
+                font-size: 14px;
+                color: #495057;
+            }
+
+            .filter-input {
+                padding: 6px 10px;
+                border: 1px solid #ced4da;
+                border-radius: 4px;
+                font-size: 14px;
+            }
+
+            .filter-input:focus {
+                outline: none;
+                border-color: #007bff;
+                box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+            }
+
+            .year-slider {
+                width: 200px;
+            }
+
+            .year-display {
+                font-weight: bold;
+                color: #007bff;
+                min-width: 60px;
+            }
+
+            .animation-controls {
+                display: flex;
+                gap: 10px;
+                align-items: center;
+            }
+
+            .btn {
+                padding: 6px 12px;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 12px;
+                font-weight: bold;
+            }
+
+            .btn-primary {
+                background-color: #007bff;
+                color: white;
+            }
+
+            .btn-primary:hover {
+                background-color: #0056b3;
+            }
+
+            .btn-secondary {
+                background-color: #6c757d;
+                color: white;
+            }
+
+            .btn-secondary:hover {
+                background-color: #545b62;
+            }
+
+            .filter-stats {
+                font-size: 12px;
+                color: #6c757d;
+                margin-top: 10px;
+            }
         </style>
     </head>
 
     <body>
         <h1>Visualization of BioRxiv Papers (Euclidean Distance)</h1>
+
+        <!-- Filter Panel -->
+        <div class="filter-panel">
+            <div class="filter-row">
+                <div class="filter-group">
+                    <label class="filter-label">Title Filter:</label>
+                    <input type="text" id="title-filter" class="filter-input" placeholder="Search in titles..." />
+                </div>
+                <div class="filter-group">
+                    <label class="filter-label">Author Filter:</label>
+                    <input type="text" id="author-filter" class="filter-input" placeholder="Search in authors..." />
+                </div>
+                <div class="filter-group">
+                    <label class="filter-label">Year Range:</label>
+                    <div style="display: flex; align-items: center; gap: 10px">
+                        <input type="range" id="year-slider" class="year-slider" min="2010" max="2025" value="2025" />
+                        <span id="year-display" class="year-display">2025</span>
+                    </div>
+                </div>
+            </div>
+            <div class="filter-row">
+                <div class="animation-controls">
+                    <button id="play-animation" class="btn btn-primary">▶ Play Animation</button>
+                    <button id="pause-animation" class="btn btn-secondary" disabled>⏸ Pause</button>
+                    <button id="reset-filters" class="btn btn-secondary">🔄 Reset All</button>
+                </div>
+                <div class="filter-stats" id="filter-stats">Showing all papers</div>
+            </div>
+        </div>
+
         <div class="container">
             <div id="plot"></div>
             <div id="info-panel">
@@ -194,6 +315,14 @@
                         <div class="meta-item">
                             <span class="meta-label">Chủ đề:</span>
                             <span id="cluster-topic" style="font-weight: bold; color: #1976d2"></span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Authors:</span>
+                            <span id="paper-authors"></span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Year:</span>
+                            <span id="paper-year"></span>
                         </div>
                         <div class="meta-item">
                             <span class="meta-label">DOI:</span>
@@ -219,6 +348,12 @@
             let selectedPoint = null;
             let clusterKeywords = {};
             let clusterLabels = {};
+            let originalData = [];
+            let filteredData = [];
+            let animationInterval = null;
+            let currentYear = 2025;
+            let minYear = 2010;
+            let maxYear = 2025;
 
             // Hàm lấy keywords và labels từ FastAPI
             async function fetchClusterKeywords() {
@@ -298,6 +433,101 @@
                 overviewElement.style.display = 'block';
             }
 
+            // Hàm lọc dữ liệu
+            function filterData() {
+                const titleFilter = document.getElementById('title-filter').value.toLowerCase();
+                const authorFilter = document.getElementById('author-filter').value.toLowerCase();
+                const yearSlider = document.getElementById('year-slider');
+                const selectedYear = parseInt(yearSlider.value);
+
+                filteredData = originalData.filter((d) => {
+                    // Lọc theo title
+                    const titleMatch = !titleFilter || d.title.toLowerCase().includes(titleFilter);
+
+                    // Lọc theo author
+                    const authorMatch = !authorFilter || (d.authors && d.authors.toLowerCase().includes(authorFilter));
+
+                    // Lọc theo year (hiển thị papers từ minYear đến selectedYear)
+                    const yearMatch = !d.year || d.year <= selectedYear;
+
+                    return titleMatch && authorMatch && yearMatch;
+                });
+
+                updateFilterStats();
+                return filteredData;
+            }
+
+            // Cập nhật thống kê filter
+            function updateFilterStats() {
+                const statsElement = document.getElementById('filter-stats');
+                const total = originalData.length;
+                const filtered = filteredData.length;
+                const yearSlider = document.getElementById('year-slider');
+                const selectedYear = parseInt(yearSlider.value);
+
+                statsElement.textContent = `Showing ${filtered} of ${total} papers (up to year ${selectedYear})`;
+            }
+
+            // Cập nhật hiển thị năm
+            function updateYearDisplay() {
+                const yearSlider = document.getElementById('year-slider');
+                const yearDisplay = document.getElementById('year-display');
+                yearDisplay.textContent = yearSlider.value;
+            }
+
+            // Animation theo năm
+            function startYearAnimation() {
+                const playBtn = document.getElementById('play-animation');
+                const pauseBtn = document.getElementById('pause-animation');
+                const yearSlider = document.getElementById('year-slider');
+
+                playBtn.disabled = true;
+                pauseBtn.disabled = false;
+
+                let currentAnimationYear = minYear;
+                yearSlider.value = currentAnimationYear;
+
+                animationInterval = setInterval(() => {
+                    currentAnimationYear++;
+                    yearSlider.value = currentAnimationYear;
+                    updateYearDisplay();
+
+                    const newFilteredData = filterData();
+                    updatePlotWithFilteredData(newFilteredData);
+
+                    if (currentAnimationYear >= maxYear) {
+                        pauseYearAnimation();
+                    }
+                }, 500); // 500ms per year
+            }
+
+            function pauseYearAnimation() {
+                const playBtn = document.getElementById('play-animation');
+                const pauseBtn = document.getElementById('pause-animation');
+
+                if (animationInterval) {
+                    clearInterval(animationInterval);
+                    animationInterval = null;
+                }
+
+                playBtn.disabled = false;
+                pauseBtn.disabled = true;
+            }
+
+            // Reset tất cả filters
+            function resetFilters() {
+                document.getElementById('title-filter').value = '';
+                document.getElementById('author-filter').value = '';
+                document.getElementById('year-slider').value = maxYear;
+                updateYearDisplay();
+
+                pauseYearAnimation();
+
+                filteredData = [...originalData];
+                updateFilterStats();
+                updatePlotWithFilteredData(filteredData);
+            }
+
             // Hàm Tải Dữ liệu từ FastAPI
             async function fetchData() {
                 try {
@@ -315,10 +545,86 @@
                 }
             }
 
+            // Hàm cập nhật plot với dữ liệu đã lọc
+            function updatePlotWithFilteredData(data) {
+                const uniqueClusters = [...new Set(originalData.map((d) => d.cluster))].sort();
+
+                const newPlotData = uniqueClusters.map((clusterName) => {
+                    const clusterData = data.filter((d) => d.cluster === clusterName);
+
+                    const customData = clusterData.map((d) => [
+                        d.url,
+                        d.title,
+                        d.doi,
+                        d.abstract || '',
+                        d.cluster,
+                        d.authors || '',
+                        d.year || ''
+                    ]);
+
+                    const hoverText = clusterData.map(
+                        (d) =>
+                            `<b>Title:</b> ${d.title}<br>` +
+                            `<b>Cluster:</b> ${d.cluster}<br>` +
+                            `<b>Year:</b> ${d.year || 'N/A'}<br>` +
+                            `<b>Authors:</b> ${(d.authors || 'N/A').substring(0, 100)}${
+                                (d.authors || '').length > 100 ? '...' : ''
+                            }<br>` +
+                            `<b>DOI:</b> ${d.doi}`
+                    );
+
+                    return {
+                        x: clusterData.map((d) => d.UMAP_1),
+                        y: clusterData.map((d) => d.UMAP_2),
+                        mode: 'markers',
+                        type: 'scattergl',
+                        name: clusterLabels[clusterName] || clusterName,
+                        marker: {
+                            size: 8,
+                            line: {
+                                width: 0.5,
+                                color: 'white'
+                            }
+                        },
+                        text: hoverText,
+                        hoverinfo: 'text',
+                        customdata: customData
+                    };
+                });
+
+                Plotly.react(plotDiv, newPlotData, {
+                    title: 'Phân cụm Paper bằng UMAP và KMeans (Euclidean)',
+                    xaxis: { title: 'UMAP 1' },
+                    yaxis: { title: 'UMAP 2' },
+                    hovermode: 'closest',
+                    clickmode: 'event+select'
+                });
+            }
+
             // Hàm Vẽ Biểu đồ Plotly
             async function renderPlot() {
                 const data = await fetchData();
                 if (!data) return;
+
+                // Lưu dữ liệu gốc và khởi tạo các thông số
+                originalData = data;
+
+                // Tính toán year range
+                const years = data.map((d) => d.year).filter((y) => y && !isNaN(y));
+                if (years.length > 0) {
+                    minYear = Math.min(...years);
+                    maxYear = Math.max(...years);
+                } else {
+                    minYear = 2010;
+                    maxYear = 2025;
+                }
+
+                // Cập nhật slider
+                const yearSlider = document.getElementById('year-slider');
+                yearSlider.min = minYear;
+                yearSlider.max = maxYear;
+                yearSlider.value = maxYear;
+                updateYearDisplay();
 
                 // Tải keywords và labels cho các clusters
                 const keywordData = await fetchClusterKeywords();
@@ -331,16 +637,34 @@
                     clusterLabels = {};
                 }
 
+                // Khởi tạo filtered data
+                filteredData = [...originalData];
+                updateFilterStats();
+
                 const uniqueClusters = [...new Set(data.map((d) => d.cluster))].sort();
 
                 plotData = uniqueClusters.map((clusterName) => {
                     const clusterData = data.filter((d) => d.cluster === clusterName);
 
-                    const customData = clusterData.map((d) => [d.url, d.title, d.doi, d.abstract || '', d.cluster]);
+                    const customData = clusterData.map((d) => [
+                        d.url,
+                        d.title,
+                        d.doi,
+                        d.abstract || '',
+                        d.cluster,
+                        d.authors || '',
+                        d.year || ''
+                    ]);
 
                     const hoverText = clusterData.map(
                         (d) =>
-                            `<b>Title:</b> ${d.title}<br>` + `<b>Cluster:</b> ${d.cluster}<br>` + `<b>DOI:</b> ${d.doi}`
+                            `<b>Title:</b> ${d.title}<br>` +
+                            `<b>Cluster:</b> ${d.cluster}<br>` +
+                            `<b>Year:</b> ${d.year || 'N/A'}<br>` +
+                            `<b>Authors:</b> ${(d.authors || 'N/A').substring(0, 100)}${
+                                (d.authors || '').length > 100 ? '...' : ''
+                            }<br>` +
+                            `<b>DOI:</b> ${d.doi}`
                     );
 
                     return {
@@ -348,7 +672,7 @@
                         y: clusterData.map((d) => d.UMAP_2),
                         mode: 'markers',
                         type: 'scattergl',
-                        name: clusterName,
+                        name: clusterLabels[clusterName] || clusterName,
                         marker: {
                             size: 8,
                             line: {
@@ -388,6 +712,8 @@
                         const doi = point.customdata[2];
                         const abstract = point.customdata[3];
                         const cluster = point.customdata[4];
+                        const authors = point.customdata[5];
+                        const year = point.customdata[6];
 
                         // Highlight điểm được chọn
                         // highlightSelectedPoint(point);
@@ -396,7 +722,7 @@
                         window.open(url, '_blank');
 
                         // Hiển thị thông tin trong panel bên phải
-                        displayPaperInfo(title, abstract, cluster, doi, url);
+                        displayPaperInfo(title, abstract, cluster, doi, url, authors, year);
                     }
                 });
 
@@ -436,7 +762,7 @@
                 }
 
                 // Hàm hiển thị thông tin bài báo
-                function displayPaperInfo(title, abstract, cluster, doi, url) {
+                function displayPaperInfo(title, abstract, cluster, doi, url, authors, year) {
                     // Ẩn placeholder và hiển thị thông tin bài báo
                     document.querySelector('.placeholder').style.display = 'none';
                     document.getElementById('paper-details').classList.add('active');
@@ -453,6 +779,12 @@
                     document.getElementById('paper-doi').textContent = doi;
                     document.getElementById('paper-url').href = url;
 
+                    // Hiển thị authors và year nếu có
+                    const authorsElement = document.getElementById('paper-authors');
+                    const yearElement = document.getElementById('paper-year');
+                    if (authorsElement) authorsElement.textContent = authors || 'N/A';
+                    if (yearElement) yearElement.textContent = year || 'N/A';
+
                     // Hiển thị keywords cho cluster
                     displayClusterKeywords(cluster);
 
@@ -466,7 +798,30 @@
                 }
             }
 
-            document.addEventListener('DOMContentLoaded', renderPlot);
+            document.addEventListener('DOMContentLoaded', function () {
+                renderPlot();
+
+                // Event listeners cho filter controls
+                document.getElementById('title-filter').addEventListener('input', function () {
+                    const newFilteredData = filterData();
+                    updatePlotWithFilteredData(newFilteredData);
+                });
+
+                document.getElementById('author-filter').addEventListener('input', function () {
+                    const newFilteredData = filterData();
+                    updatePlotWithFilteredData(newFilteredData);
+                });
+
+                document.getElementById('year-slider').addEventListener('input', function () {
+                    updateYearDisplay();
+                    const newFilteredData = filterData();
+                    updatePlotWithFilteredData(newFilteredData);
+                });
+
+                document.getElementById('play-animation').addEventListener('click', startYearAnimation);
+                document.getElementById('pause-animation').addEventListener('click', pauseYearAnimation);
+                document.getElementById('reset-filters').addEventListener('click', resetFilters);
+            });
         </script>
     </body>
 </html>

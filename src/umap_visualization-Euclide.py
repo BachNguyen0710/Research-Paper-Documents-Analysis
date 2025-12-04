@@ -45,6 +45,23 @@ def main():
         titles = df_metadata['title'].tolist()
         dois = df_metadata['doi'].tolist()
         abstracts = df_metadata['abstract'].tolist() if 'abstract' in df_metadata.columns else ['' for _ in range(len(titles))]
+        authors = df_metadata['authors_raw'].tolist() if 'authors_raw' in df_metadata.columns else ['' for _ in range(len(titles))]
+        dates = df_metadata['date'].tolist() if 'date' in df_metadata.columns else ['' for _ in range(len(titles))]
+        
+        # Extract years from dates
+        years = []
+        for date in dates:
+            if pd.notna(date) and date:
+                try:
+                    if isinstance(date, str):
+                        year = int(date.split('-')[0])
+                    else:
+                        year = date.year if hasattr(date, 'year') else 2020
+                    years.append(year)
+                except:
+                    years.append(2020)  # Default year
+            else:
+                years.append(2020)
         
     except Exception as e:
         print(f"Error loading metadata: {e}. Cannot proceed without DOI.")
@@ -81,6 +98,8 @@ def main():
     df_vis['title'] = titles
     df_vis['doi'] = dois
     df_vis['abstract'] = abstracts
+    df_vis['authors'] = authors
+    df_vis['year'] = years
     
     df_vis['cluster'] = cluster_labels
     df_vis['cluster'] = 'Cluster ' + df_vis['cluster'].astype(str) 
@@ -89,7 +108,7 @@ def main():
 
     print(f"Saving visualization data to {args.output}...")
 
-    df_vis[['UMAP_1', 'UMAP_2', 'title', 'cluster', 'doi', 'url', 'abstract']].to_json(
+    df_vis[['UMAP_1', 'UMAP_2', 'title', 'cluster', 'doi', 'url', 'abstract', 'authors', 'year']].to_json(
         args.output,
         orient='records',
         lines=True,

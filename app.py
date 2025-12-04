@@ -41,8 +41,7 @@ async def get_cluster_keywords():
     
     try:
         df = pd.read_json(DATA_FILE, orient='records', lines=True)
-        
-        # Kiểm tra xem có cột abstract không
+
         if 'abstract' not in df.columns:
             return {"error": "Abstract data not found. Please regenerate data with abstracts."}, 400
         
@@ -54,11 +53,12 @@ async def get_cluster_keywords():
         if not cluster_texts:
             return {"error": "No valid abstracts found."}, 400
         
+       
         cluster_docs = {}
         for cluster, abstracts in cluster_texts.items():
             cluster_docs[cluster] = ' '.join(abstracts)
         
-        # Tiền xử lý text với custom stopwords
+       
         def preprocess_text(text):
             text = re.sub(r'[^a-zA-Z\s]', '', text.lower())
             
@@ -103,15 +103,14 @@ async def get_cluster_keywords():
         
         processed_docs = {cluster: preprocess_text(text) for cluster, text in cluster_docs.items()}
         
-        # Tính TF-IDF với tham số được tối ưu
         vectorizer = TfidfVectorizer(
             max_features=2000,
-            ngram_range=(1, 3),  
-            min_df=1,  
-            max_df=0.7, 
-            stop_words=None,  
-            lowercase=False,  
-            token_pattern=r'\b[a-zA-Z]{3,}\b'
+            ngram_range=(1, 3),  # Unigrams, bigrams và trigrams
+            min_df=1,  # Từ phải xuất hiện ít nhất 1 lần
+            max_df=0.7,  # Không lấy từ xuất hiện quá nhiều (>70% documents)
+            stop_words=None,  # Đã xử lý stopwords trong preprocess_text
+            lowercase=False,  # Đã lowercase trong preprocess_text
+            token_pattern=r'\b[a-zA-Z]{3,}\b'  # Chỉ lấy từ có ít nhất 3 ký tự
         )
         
         cluster_names = list(processed_docs.keys())
@@ -128,7 +127,7 @@ async def get_cluster_keywords():
                 return "Unknown Topic"
             
             top_keywords = [kw['keyword'] for kw in keywords[:3]]
-
+            
             topic_patterns = {
                 'Genetics & Genomics': ['genetic', 'genome', 'dna', 'mutation', 'sequencing', 'genomic', 'variant', 'chromosome', 'inheritance', 'allele'],
                 'Cancer Research': ['cancer', 'tumor', 'malignant', 'oncology', 'chemotherapy', 'metastasis', 'carcinoma', 'neoplasm', 'radiation', 'biopsy'],
@@ -155,7 +154,6 @@ async def get_cluster_keywords():
                     max_matches = matches
                     best_match = topic
             
-
             if best_match and max_matches >= 1:
                 return best_match
             
