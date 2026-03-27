@@ -33,6 +33,6 @@ py src/umap_visualization-Euclide.py --input output/embeddings.jsonl --titles da
 ```
 ### 4. Run App
 ```bash
-uvicorn app:app --reload
+uvicorn app.app:app --reload
 ```
 ### Go to locall host http://127.0.0.1:8000 for visualization and interaction 

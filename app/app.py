@@ -13,7 +13,12 @@ import numpy as np
 
 app = FastAPI()
 
-templates = Jinja2Templates(directory="templates")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
+
+@app.get("/", response_class=HTMLResponse)
+async def read_root(request: Request):
+    return templates.TemplateResponse(request=request, name="index.html", context={"request": request})
 
 
 DATA_FILE = "output/umap_euclide_data.json"
@@ -188,10 +193,10 @@ async def get_cluster_keywords():
     except Exception as e:
         return {"error": f"Error processing TF-IDF: {str(e)}"}, 500
 
-@app.get("/", response_class=HTMLResponse)
-async def read_root(request: Request):
-    """Serve the main visualization page."""
-    return templates.TemplateResponse("index.html", {"request": request})
+# @app.get("/", response_class=HTMLResponse)
+# async def read_root(request: Request):
+#     """Serve the main visualization page."""
+#     return templates.TemplateResponse("index.html", {"request": request})
 
 if __name__ == "__main__":
     import uvicorn
