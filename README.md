@@ -88,39 +88,39 @@ uvicorn app.app:app --reload
 ### 6. Run Docker 
 1.  **Build image**:
 ```bash 
-docker build -t taxi-app:latest .
+docker build -t analysis-app:latest .
 ```
 
-2.  **Chạy container**:
+2.  **Run container**:
 ```bash
-docker run -d -p 8000:8000 --name taxi-container taxi-app:latest
+docker run -d -p 8000:8000 --name paper-container analysis-app:latest
 ```
 
-*   \-d → chạy ở background
+*   \-d → run at background
     
 *   \-p 8000:8000 → map port host → container
     
-*   \--name taxi-container → đặt tên container
+*   \--name paper-container → named container
     
 
-3.  **Kiểm tra logs** (nếu muốn xem output):
+3.  **check logs** (nếu muốn xem output):
 
 ```bash
-docker logs -f taxi-container
+docker logs -f paper-container
 ```
-4. Mở trình duyệt và truy cập: `http://localhost:8000`
+4. Open browser and access: `http://localhost:8000`
 
-5. Dừng container khi không sử dụng:
+5. Stop container when no use:
 ```bash
 docker stop taxi-container
 ```
 
-6. **Ở những lần chạy sau, chỉ cần truy cập trên `http://localhost:8000`**.
-* Nếu container đã bị stop, chạy lại container:
+6. **Nex run time, only access `http://localhost:8000`**.
+* if container stopped, run container:
   ```bash
   docker start taxi-container
   ```
-* Kiểm tra container đã chạy chưa:
+* check if container is running:
   ```bash
   docker ps
   ```
