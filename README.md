@@ -55,10 +55,8 @@ Research-Paper-Documents-Analysis/
 ├── .gitignore                  # Excluded files/folders
 └── README.md                   # Project documentation# Research Paper Documents Analysis
 This project establishes a complete, end-to-end pipeline for collecting, analyzing, and visualizing the topical structure of scholarly papers published on BioRxiv (the preprint repository for biological sciences). It leverages modern machine learning techniques (Embedding and UMAP) combined with the FastAPI web framework to deliver an interactive data exploration platform.
-# How to run
-## Require
-Make sure you've installed all in requirement.txt
-## 1. Embedding the data
+```
+## 2. Embedding the data
 options:
   * --data-path: path to data
   * --ouput: path output
@@ -67,7 +65,7 @@ options:
 ```bash
 py src/embed_papers_hf.py --data-path data/biorxiv_sciedu.csv --output output/embeddings.jsonl --batch-size 8 --clean_stopword True
 ```
-## 2. Visualization data
+## 3. Visualization data
 options:
 ```bash
 ### Cosine Method
@@ -77,12 +75,53 @@ py src/umap_visualization-Euclide.py --input output/embeddings.jsonl --titles da
 ### HDBSCAN
 python src/umap_visualization_hdbscan.py --input output/embeddings.jsonl --titles data/biorxiv_sciedu.csv --output output/umap_hdbscan_clusters_fast.html
 ```
-### 3. Extract data for FastApi
+## 4. Extract data for FastApi
 ```bash
 py src/umap_visualization-Euclide.py --input output/embeddings.jsonl --titles data/biorxiv_sciedu.csv --output output/umap_euclide_data.json --n-clusters 6
 ```
-### 4. Run App
+## 5. Run App (local)
 ```bash
 uvicorn app.app:app --reload
 ```
-### Go to locall host http://127.0.0.1:8000 for visualization and interaction 
+### Go to locall host http://127.0.0.1:8000 for visualization and interaction
+
+### 6. Run Docker 
+1.  **Build image**:
+```bash 
+docker build -t taxi-app:latest .
+```
+
+2.  **Chạy container**:
+```bash
+docker run -d -p 8000:8000 --name taxi-container taxi-app:latest
+```
+
+*   \-d → chạy ở background
+    
+*   \-p 8000:8000 → map port host → container
+    
+*   \--name taxi-container → đặt tên container
+    
+
+3.  **Kiểm tra logs** (nếu muốn xem output):
+
+```bash
+docker logs -f taxi-container
+```
+4. Mở trình duyệt và truy cập: `http://localhost:8000`
+
+5. Dừng container khi không sử dụng:
+```bash
+docker stop taxi-container
+```
+
+6. **Ở những lần chạy sau, chỉ cần truy cập trên `http://localhost:8000`**.
+* Nếu container đã bị stop, chạy lại container:
+  ```bash
+  docker start taxi-container
+  ```
+* Kiểm tra container đã chạy chưa:
+  ```bash
+  docker ps
+  ```
+
